@@ -131,7 +131,7 @@ async def register(interaction: discord.Interaction):
     save_config(config)
     await interaction.response.send_message("가입이 완료되었습니다. 이제 명령어를 사용할 수 있습니다.")
 
-@client.tree.command(name="탈퇴", description="봇 사용을 위한 탈퇴를 합니다.")
+@client.tree.command(name="탈퇴", description="서비스에서 탈퇴를 합니다. 라이센스는 복구 불가능하니 신중하게 선택해주세요.")
 async def unregister(interaction: discord.Interaction):
     if is_banned(interaction.user.id):
         await interaction.response.send_message("당신은 차단되어 있어서 탈퇴할 수 없습니다.")
