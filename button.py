@@ -155,7 +155,7 @@ async def my_info_function(interaction: discord.Interaction):
 async def register(interaction: discord.Interaction):
     await register_function(interaction)
 
-@client.tree.command(name="탈퇴", description="봇 사용을 위한 탈퇴를 합니다.")
+@client.tree.command(name="탈퇴", description=탈퇴를 합니다. 모든 라이센스는 삭제되니 신중히 선택해주세요.")
 async def unregister(interaction: discord.Interaction):
     await unregister_function(interaction)
 
