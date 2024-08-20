@@ -277,13 +277,16 @@ async def list_info(interaction: discord.Interaction, option: str):
         await interaction.response.send_message("유효하지 않은 옵션입니다. '라이센스', '유저', '차단', '총관리자' 중 하나를 선택하세요.", ephemeral=True)
 
 @client.tree.command(name="관리", description="유저의 라이센스, 플랜, 만료일을 관리합니다.")
-@app_commands.describe(user="관리할 유저", action="수행할 작업", value="설정할 값")
+@app_commands.describe(user="관리할 유저", action="수행할 작업", action_value="설정할 값")
 @app_commands.choices(action=[
-    app_commands.Choice(name="라이센스관리", value="license"),
-    app_commands.Choice(name="플랜관리", value="plan"),
-    app_commands.Choice(name="만료일", value="expiry")
+    app_commands.Choice(name="라이센스변경", value="license_change"),
+    app_commands.Choice(name="라이센스삭제", value="license_delete"),
+    app_commands.Choice(name="플랜변경(Deluxe)", value="plan_deluxe"),
+    app_commands.Choice(name="플랜변경(Standard)", value="plan_standard"),
+    app_commands.Choice(name="플랜변경(Premium)", value="plan_premium"),
+    app_commands.Choice(name="만료일변경", value="expiry_change")
 ])
-async def manage_user(interaction: discord.Interaction, user: discord.User, action: str, value: str = None):
+async def manage_user(interaction: discord.Interaction, user: discord.User, action: str, action_value: str = None):
     if not is_admin(interaction.user.id) and interaction.user.id != client.admin_id:
         await interaction.response.send_message("당신은 이 명령어를 사용할 권한이 없습니다.")
         return
@@ -295,35 +298,32 @@ async def manage_user(interaction: discord.Interaction, user: discord.User, acti
 
     user_info = users[user.id]
 
-    if action == "license":
-        if value == "변경":
-            new_license = generate_license()
-            user_info['license'] = new_license
-            await interaction.response.send_message(f"{user.name}의 라이센스가 변경되었습니다: {new_license}")
-        elif value == "삭제":
-            user_info['license'] = ''
-            await interaction.response.send_message(f"{user.name}의 라이센스가 삭제되었습니다.")
-        else:
-            await interaction.response.send_message("유효하지 않은 값입니다. '변경' 또는 '삭제'를 선택하세요.")
-
-    elif action == "plan":
-        if value in ["deluxe", "standard", "premium"]:
-            user_info['plan'] = value
-            await interaction.response.send_message(f"{user.name}의 플랜이 {value}로 변경되었습니다.")
-        else:
-            await interaction.response.send_message("유효하지 않은 플랜입니다. 'deluxe', 'standard', 'premium' 중 하나를 선택하세요.")
-
-    elif action == "expiry":
+    if action == "license_change":
+        new_license = generate_license()
+        user_info['license'] = new_license
+        await interaction.response.send_message(f"{user.name}의 라이센스가 변경되었습니다: {new_license}")
+    elif action == "license_delete":
+        user_info['license'] = ''
+        await interaction.response.send_message(f"{user.name}의 라이센스가 삭제되었습니다.")
+    elif action == "plan_deluxe":
+        user_info['plan'] = "deluxe"
+        await interaction.response.send_message(f"{user.name}의 플랜이 deluxe로 변경되었습니다.")
+    elif action == "plan_standard":
+        user_info['plan'] = "standard"
+        await interaction.response.send_message(f"{user.name}의 플랜이 standard로 변경되었습니다.")
+    elif action == "plan_premium":
+        user_info['plan'] = "premium"
+        await interaction.response.send_message(f"{user.name}의 플랜이 premium으로 변경되었습니다.")
+    elif action == "expiry_change":
         try:
-            new_expiry = datetime.strptime(value, "%Y%m%d").strftime("%Y-%m-%d")
+            new_expiry = datetime.strptime(action_value, "%Y%m%d").strftime("%Y-%m-%d")
             user_info['expiry_date'] = new_expiry
             await interaction.response.send_message(f"{user.name}의 만료일이 {new_expiry}로 변경되었습니다.")
         except ValueError:
             await interaction.response.send_message("유효하지 않은 날짜 형식입니다. 'YYYYMMDD' 형식으로 입력하세요.")
-
     else:
         await interaction.response.send_message("유효하지 않은 작업입니다.")
 
     save_users(users)
-
+    
 client.run('토큰')
