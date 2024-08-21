@@ -14,14 +14,29 @@ class MyClient(discord.Client):
         intents.members = True
         super().__init__(intents=intents)
         self.tree = app_commands.CommandTree(self)
-        self.admin_id = 유저아이디
-        self.config_file = r'콘픽'
-        self.users_csv = r'csv파일'
+        self.admin_id = 1238461591557771355
+        self.config_file = r'config.json'
+        self.users_csv = r'users.csv'
         
     async def setup_hook(self):
         await self.tree.sync()
 
 client = MyClient()
+
+class ConfirmView(discord.ui.View):
+    def __init__(self):
+        super().__init__()
+        self.value = None
+
+    @discord.ui.button(label="확인", style=discord.ButtonStyle.danger)
+    async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.value = True
+        self.stop()
+
+    @discord.ui.button(label="취소", style=discord.ButtonStyle.secondary)
+    async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.value = False
+        self.stop()
 
 def load_config():
     if os.path.exists(client.config_file):
@@ -99,13 +114,24 @@ def generate_license():
 async def on_ready():
     print(f'봇이 {client.user}로 로그인했습니다.')
 
-@client.tree.command(name="내정보", description="자신의 정보를 확인합니다.")
-async def my_info(interaction: discord.Interaction):
-    user_id = interaction.user.id
+@client.tree.command(name="정보", description="정보를 확인합니다.")
+async def my_info(interaction: discord.Interaction, user: discord.User = None):
+    if user != None:
+        if interaction.user.id != client.admin_id and is_admin(interaction.user.id) != True:
+            embed = discord.Embed(title="ERROR", description="당신은 이 명령어를 사용할 권한이 없습니다.", color=discord.Color.red())
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+            return
+        else:
+            user_id = user.id
+    else:
+        user_id = interaction.user.id
+
+    
     user_info = get_user_info(user_id)
     
     if not user_info:
-        await interaction.response.send_message("등록된 정보가 없습니다. /가입 명령어를 사용하여 가입하십시오.", ephemeral=True)
+        embed = discord.Embed(title="ERROR", description="가입되지 않은 사용자입니다.", color=discord.Color.red())
+        await interaction.response.send_message(embed=embed, ephemeral=True)
         return
     
     banned_status = "차단됨" if user_info.get('banned') == 'True' else "차단되지 않음"
@@ -113,16 +139,25 @@ async def my_info(interaction: discord.Interaction):
     plan = user_info.get('plan', '없음')
     expiry_date = user_info.get('expiry_date', '없음')
     
-    info_message = (
-        f"**유저 아이디:** {user_id}\n"
-        f"**유저 닉네임:** {interaction.user.name}\n"
-        f"**차단 여부:** {banned_status}\n"
-        f"**라이센스:** {license_info}\n"
-        f"**플랜:** {plan}\n"
-        f"**만료일:** {expiry_date}"
-    )
+    embed = discord.Embed(title="내 정보", color=discord.Color.blue())
+    embed.add_field(name="**유저 아이디**", value=user_id)
+    embed.add_field(name="**유저 닉네임**", value=interaction.user.name)
+    embed.add_field(name="**차단 여부**", value=banned_status)
+    embed.add_field(name="**라이센스**", value=license_info)
+    embed.add_field(name="**플랜**", value=plan)
+    embed.add_field(name="**만료일**", value=expiry_date)
+    embed.set_thumbnail(url=interaction.user.avatar)
+
+    # info_message = (
+    #     f"**유저 아이디:** {user_id}\n"
+    #     f"**유저 닉네임:** {interaction.user.name}\n"
+    #     f"**차단 여부:** {banned_status}\n"
+    #     f"**라이센스:** {license_info}\n"
+    #     f"**플랜:** {plan}\n"
+    #     f"**만료일:** {expiry_date}"
+    # )
     
-    await interaction.response.send_message(info_message, ephemeral=True)
+    await interaction.response.send_message(embed=embed, ephemeral=True)
 
 @client.tree.command(name="총관리자", description="총관리자를 추가하거나 삭제합니다.")
 @app_commands.describe(action="추가하거나 삭제할 작업", user="총관리자 상태로 만들거나 삭제할 사용자")
@@ -184,48 +219,67 @@ async def manage_ban(interaction: discord.Interaction, action: str, user: discor
 async def register(interaction: discord.Interaction):
     user_id = interaction.user.id
     if is_banned(user_id):
-        await interaction.response.send_message("당신은 차단되어 있어서 가입할 수 없습니다.")
+        embed = discord.Embed(title="ERROR", description="BOT Service 에서 차단된 유저입니다.", color=discord.Color.red())
+        await interaction.response.send_message(embed=embed, ephemeral=True)
         return
 
     if get_user_info(user_id):
-        await interaction.response.send_message("이미 가입된 사용자입니다.")
+        embed = discord.Embed(title="ERROR", description="이미 가입된 사용자입니다.", color=discord.Color.red())
+        await interaction.response.send_message(embed=embed, ephemeral=True)
         return
 
     add_user(user_id, interaction.user.name)
-    await interaction.response.send_message("가입이 완료되었습니다. 이제 명령어를 사용할 수 있습니다.")
+    embed = discord.Embed(title="SUCCESS", description="가입이 완료되었습니다. 이제 명령어를 사용할 수 있습니다.", color=discord.Color.green())
+    await interaction.response.send_message(embed=embed, ephemeral=True)
 
 @client.tree.command(name="탈퇴", description="봇 사용을 위한 탈퇴를 합니다.")
 async def unregister(interaction: discord.Interaction):
     user_id = interaction.user.id
     if is_banned(user_id):
-        await interaction.response.send_message("당신은 차단되어 있어서 탈퇴할 수 없습니다.")
+        embed = discord.Embed(title="ERROR", description="BOT Service 에서 차단된 유저입니다.", color=discord.Color.red())
+        await interaction.response.send_message(embed=embed, ephemeral=True)
         return
 
     if not get_user_info(user_id):
-        await interaction.response.send_message("가입되지 않은 사용자입니다.")
+        embed = discord.Embed(title="ERROR", description="가입되지 않은 사용자입니다.", color=discord.Color.red())
+        await interaction.response.send_message(embed=embed, ephemeral=True)
         return
 
-    remove_user(user_id)
-    await interaction.response.send_message("탈퇴가 완료되었습니다. 모든 라이센스가 삭제되었습니다.")
+    view = ConfirmView()
+    embed = discord.Embed(title="CONFIRM", description="정말로 탈퇴하시겠습니까?", color=discord.Color.orange())
+    await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+    await view.wait()
+
+    if view.value is None:
+        await interaction.followup.send("시간이 초과되었습니다. 다시 시도해주세요.", ephemeral=True)
+    elif view.value:
+        remove_user(user_id)
+        embed = discord.Embed(title="SUCCESS", description="탈퇴가 완료되었습니다. 모든 라이센스가 삭제되었습니다.\n 저희 서비스를 이용해주셔서 감사합니다.", color=discord.Color.green())
+        await interaction.followup.send(embed=embed, ephemeral=True)
+    else:
+        await interaction.followup.send("탈퇴가 취소되었습니다.", ephemeral=True)
 
 @client.tree.command(name="생성", description="새로운 라이센스를 생성합니다.")
 async def create_license(interaction: discord.Interaction):
     user_id = interaction.user.id
     if is_banned(user_id):
-        await interaction.response.send_message("당신은 차단되어 있어서 봇 사용이 금지되어 있습니다.")
+        embed = discord.Embed(title="ERROR", description="BOT Service 에서 차단된 유저입니다.", color=discord.Color.red())
+        await interaction.response.send_message(embed=embed, ephemeral=True)
         return
 
     user_info = get_user_info(user_id)
     if not user_info:
-        await interaction.response.send_message("가입되지 않은 사용자입니다. /가입 명령어를 사용하여 가입하십시오.")
+        embed = discord.Embed(title="ERROR", description=f"가입되지 않은 사용자입니다.\n /가입 명령어를 사용하여 가입하십시오.", color=discord.Color.red())
+        await interaction.response.send_message(embed=embed, ephemeral=True)
         return
 
     if user_info.get('license'):
-        await interaction.response.send_message("각 사용자는 하나의 라이센스만 가질 수 있습니다.")
+        embed = discord.Embed(title="ERROR", description="이미 라이센스를 발급하셨습니다.", color=discord.Color.red())
+        await interaction.response.send_message(embed=embed, ephemeral=True)
         return
 
     license_code = generate_license()
-    plan = "deluxe"  # 기본 플랜을 deluxe로 변경
+    plan = "free"  # 기본 플랜을 deluxe로 변경
     expiry_date = (datetime.now() + timedelta(days=365)).strftime("%Y-%m-%d")
     
     user_info['license'] = license_code
@@ -233,7 +287,8 @@ async def create_license(interaction: discord.Interaction):
     user_info['expiry_date'] = expiry_date
     save_users({user_id: user_info})
     
-    await interaction.response.send_message(f"새로운 라이센스가 생성되었습니다: {license_code}", ephemeral=True)
+    embed = discord.Embed(title="SUCCESS", description=f"새로운 라이센스가 생성되었습니다\n ```{license_code}```", color=discord.Color.green())
+    await interaction.response.send_message(embed=embed, ephemeral=True)
 
 @client.tree.command(name="목록", description="라이센스, 유저, 차단, 총관리자 목록을 표시합니다.")
 @app_commands.describe(option="표시할 목록의 종류")
@@ -246,7 +301,8 @@ async def create_license(interaction: discord.Interaction):
 async def list_info(interaction: discord.Interaction, option: str):
     user_id = interaction.user.id
     if not is_admin(user_id) and user_id != client.admin_id:
-        await interaction.response.send_message("당신은 이 명령어를 사용할 권한이 없습니다.")
+        embed = discord.Embed(title="ERROR", description="당신은 이 명령어를 사용할 권한이 없습니다.", color=discord.Color.red())
+        await interaction.response.send_message(embed=embed, ephemeral=True)
         return
 
     users = load_users()
@@ -255,45 +311,65 @@ async def list_info(interaction: discord.Interaction, option: str):
         licenses = [info for info in users.values() if info.get('license')]
         if licenses:
             license_list = "\n".join([f"사용자: {info['username']}, 라이센스: {info['license']}" for info in licenses])
-            await interaction.response.send_message(f"라이센스 목록:\n{license_list}", ephemeral=True)
+            embed = discord.Embed(title="라이센스 목록", description=license_list, color=discord.Color.blue())
+            await interaction.response.send_message(embed=embed, ephemeral=True)
         else:
-            await interaction.response.send_message("생성된 라이센스가 없습니다.", ephemeral=True)
+            embed = discord.Embed(title="ERROR", description="생성된 라이센스가 없습니다.", color=discord.Color.red())
+            await interaction.response.send_message(embed=embed, ephemeral=True)
     
     elif option == "users":
         user_list = "\n".join([info['username'] for info in users.values()])
-        await interaction.response.send_message(f"가입된 유저 목록:\n{user_list}" if user_list else "가입된 유저가 없습니다.", ephemeral=True)
+        embed = discord.Embed(title="유저 목록", description=user_list, color=discord.Color.blue())
+        if user_list:
+            await interaction.response.send_message(embed=embed, ephemeral=True, color=discord.Color.blue())    
+        else:
+            embed = discord.Embed(title="ERROR", description="가입된 유저가 없습니다.", color=discord.Color.red())
+            await interaction.response.send_message(embed=embed, ephemeral=True)
 
     elif option == "banned":
         banned_users = [info['username'] for info in users.values() if info.get('banned') == 'True']
         banned_list = "\n".join(banned_users)
-        await interaction.response.send_message(f"차단된 유저 목록:\n{banned_list}" if banned_list else "차단된 유저가 없습니다.", ephemeral=True)
+        if banned_list:
+            embed = discord.Embed(title="차단된 유저 목록", description=banned_list, color=discord.Color.blue())
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+        else:
+            embed = discord.Embed(title="ERROR", description="차단된 유저가 없습니다.", color=discord.Color.red())
+            await interaction.response.send_message(embed=embed, ephemeral=True)
 
     elif option == "admins":
         admin_users = [interaction.guild.get_member(admin_id) for admin_id in load_config().get("admins", [])]
         admin_list = "\n".join([user.name for user in admin_users if user is not None])
-        await interaction.response.send_message(f"총관리자 목록:\n{admin_list}" if admin_list else "총관리자가 없습니다.", ephemeral=True)
+        if admin_list:
+            embed = discord.Embed(title="총관리자 목록", description=admin_list, color=discord.Color.blue())
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+        else:
+            embed = discord.Embed(title="ERROR", description="총관리자가 없습니다.", color=discord.Color.red())
+            await interaction.response.send_message(embed=embed, ephemeral=True)
     
     else:
-        await interaction.response.send_message("유효하지 않은 옵션입니다. '라이센스', '유저', '차단', '총관리자' 중 하나를 선택하세요.", ephemeral=True)
+        embed = discord.Embed(title="ERROR", description="유효하지 않은 옵션입니다. '라이센스', '유저', '차단', '총관리자' 중 하나를 선택하세요.", color=discord.Color.red())
+        await interaction.response.send_message(embed=embed, ephemeral=True)
 
 @client.tree.command(name="관리", description="유저의 라이센스, 플랜, 만료일을 관리합니다.")
 @app_commands.describe(user="관리할 유저", action="수행할 작업", action_value="설정할 값")
 @app_commands.choices(action=[
     app_commands.Choice(name="라이센스변경", value="license_change"),
     app_commands.Choice(name="라이센스삭제", value="license_delete"),
-    app_commands.Choice(name="플랜변경(Deluxe)", value="plan_deluxe"),
-    app_commands.Choice(name="플랜변경(Standard)", value="plan_standard"),
+    app_commands.Choice(name="플랜변경(Free)", value="plan_free"),
+    app_commands.Choice(name="플랜변경(Standard)", value="plan_deluxe"),
     app_commands.Choice(name="플랜변경(Premium)", value="plan_premium"),
     app_commands.Choice(name="만료일변경", value="expiry_change")
 ])
 async def manage_user(interaction: discord.Interaction, user: discord.User, action: str, action_value: str = None):
     if not is_admin(interaction.user.id) and interaction.user.id != client.admin_id:
-        await interaction.response.send_message("당신은 이 명령어를 사용할 권한이 없습니다.")
+        embed = discord.Embed(title="ERROR", description="당신은 이 명령어를 사용할 권한이 없습니다.", color=discord.Color.red())
+        await interaction.response.send_message(embed=embed, ephemeral=True)
         return
 
     users = load_users()
     if user.id not in users:
-        await interaction.response.send_message("해당 유저는 가입되어 있지 않습니다.")
+        embed = discord.Embed(title="ERROR", description="해당 유저는 가입되어 있지 않습니다.", color=discord.Color.red())
+        await interaction.response.send_message(embed=embed, ephemeral=True)
         return
 
     user_info = users[user.id]
@@ -301,28 +377,36 @@ async def manage_user(interaction: discord.Interaction, user: discord.User, acti
     if action == "license_change":
         new_license = generate_license()
         user_info['license'] = new_license
-        await interaction.response.send_message(f"{user.name}의 라이센스가 변경되었습니다: {new_license}")
+        embed = discord.Embed(title="SUCCESS", description=f"{user.name}의 라이센스가 변경되었습니다: {new_license}", color=discord.Color.green())
+        await interaction.response.send_message(embed=embed, ephemeral=True)
     elif action == "license_delete":
         user_info['license'] = ''
-        await interaction.response.send_message(f"{user.name}의 라이센스가 삭제되었습니다.")
-    elif action == "plan_deluxe":
-        user_info['plan'] = "deluxe"
-        await interaction.response.send_message(f"{user.name}의 플랜이 deluxe로 변경되었습니다.")
+        embed = discord.Embed(title="SUCCESS", description=f"{user.name}의 라이센스가 삭제되었습니다.", color=discord.Color.green())
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+    elif action == "plan_free":
+        user_info['plan'] = "free"
+        embed = discord.Embed(title="SUCCESS", description=f"{user.name}의 플랜이 Free로 변경되었습니다.", color=discord.Color.green())
+        await interaction.response.send_message(embed=embed, ephemeral=True)
     elif action == "plan_standard":
         user_info['plan'] = "standard"
-        await interaction.response.send_message(f"{user.name}의 플랜이 standard로 변경되었습니다.")
+        embed = discord.Embed(title="SUCCESS", description=f"{user.name}의 플랜이 Standard로 변경되었습니다.", color=discord.Color.green())
+        await interaction.response.send_message(embed=embed, ephemeral=True)
     elif action == "plan_premium":
         user_info['plan'] = "premium"
-        await interaction.response.send_message(f"{user.name}의 플랜이 premium으로 변경되었습니다.")
+        embed = discord.Embed(title="SUCCESS", description=f"{user.name}의 플랜이 Premium로 변경되었습니다.", color=discord.Color.green())
+        await interaction.response.send_message(embed=embed, ephemeral=True)
     elif action == "expiry_change":
         try:
             new_expiry = datetime.strptime(action_value, "%Y%m%d").strftime("%Y-%m-%d")
             user_info['expiry_date'] = new_expiry
-            await interaction.response.send_message(f"{user.name}의 만료일이 {new_expiry}로 변경되었습니다.")
+            embed = discord.Embed(title="SUCCESS", description=f"{user.name}의 만료일이 변경되었습니다: {new_expiry}", color=discord.Color.green())
+            await interaction.response.send_message(embed=embed, ephemeral=True)
         except ValueError:
-            await interaction.response.send_message("유효하지 않은 날짜 형식입니다. 'YYYYMMDD' 형식으로 입력하세요.")
+            embed = discord.Embed(title="ERROR", description="유효하지 않은 날짜 형식입니다. 'YYYYMMDD' 형식으로 입력하세요.", color=discord.Color.red())
+            await interaction.response.send_message(embed=embed, ephemeral=True)
     else:
-        await interaction.response.send_message("유효하지 않은 작업입니다.")
+        embed = discord.Embed(title="ERROR", description="유효하지 않은 작업입니다.", color=discord.Color.red())
+        await interaction.response.send_message(embed=embed, ephemeral=True)
 
     save_users(users)
     

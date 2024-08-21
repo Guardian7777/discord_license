@@ -1,6 +1,8 @@
 {
     "licenses": [],
     "banned_users": [],
-    "admins": [],
+    "admins": [
+        1238461591557771355
+    ],
     "registered_users": []
 }

@@ -12,7 +12,7 @@ class MyClient(discord.Client):
         intents.members = True
         super().__init__(intents=intents)
         self.tree = app_commands.CommandTree(self)
-        self.admin_id = # 본인 아이디 넣으셈
+        self.admin_id = 1238461591557771355 # 본인 아이디 넣으셈
         self.config_file = r'config.json' # 콘픽 경로 복사한 다음 config.json 지우고 붙여넣기 ㄱㄱ
 
     async def setup_hook(self):
