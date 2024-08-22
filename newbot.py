@@ -28,15 +28,34 @@ class ConfirmView(discord.ui.View):
         super().__init__()
         self.value = None
 
-    @discord.ui.button(label="확인", style=discord.ButtonStyle.danger)
+    @discord.ui.button(label="탈퇴", style=discord.ButtonStyle.danger)
     async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
-        self.value = True
-        self.stop()
+        await interaction.response.send_modal(UnregisterModal())
 
     @discord.ui.button(label="취소", style=discord.ButtonStyle.secondary)
     async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.value = False
+        embed = discord.Embed(title="취소됨", description="탈퇴가 취소되었습니다.", color=discord.Color.blue())
+        await interaction.response.edit_message(embed=embed, view=None)
         self.stop()
+
+class UnregisterModal(discord.ui.Modal, title="탈퇴 확인"):
+    confirm_text = discord.ui.TextInput(
+        label="탈퇴를 확인하려면 '탈퇴'라고 입력하세요",
+        style=discord.TextStyle.short,
+        placeholder="탈퇴",
+        required=True,
+    )
+
+    async def on_submit(self, interaction: discord.Interaction):
+        if self.confirm_text.value == "탈퇴":
+            user_id = interaction.user.id
+            remove_user(user_id)
+            embed = discord.Embed(title="SUCCESS", description="탈퇴가 완료되었습니다. 모든 라이센스가 삭제되었습니다.\n저희 서비스를 이용해주셔서 감사합니다.", color=discord.Color.green())
+        else:
+            embed = discord.Embed(title="취소됨", description="올바른 확인 텍스트를 입력하지 않아 탈퇴가 취소되었습니다.", color=discord.Color.blue())
+        
+        await interaction.response.edit_message(embed=embed, view=None)
 
 def load_config():
     if os.path.exists(client.config_file):
@@ -72,19 +91,18 @@ def load_banlist():
     if os.path.exists('banlist.csv'):
         banlist = {}
         with open('banlist.csv', 'r', encoding='utf-8') as f:
-            reader = csv.Dictreader(f)
+            reader = csv.DictReader(f)
             for row in reader:
-                banlist[int(row['user_id'])] = row
-    return banlist
+                banlist[int(row['user_id'])] = row['reason']
+        return banlist
+    return {}
 
 def save_banlist(banlist):
     with open('banlist.csv', 'w', newline='', encoding='utf-8') as f:
         writer = csv.DictWriter(f, fieldnames=['user_id', 'reason'])
         writer.writeheader()
-
-        writer = csv.writer(f)
         for user_id, reason in banlist.items():
-            writer.writerow([user_id, reason])
+            writer.writerow({'user_id': user_id, 'reason': reason})
 
 def save_users(users):
     with open(client.users_csv, 'w', newline='') as f:
@@ -111,7 +129,6 @@ def add_user(user_id, username):
         users[user_id] = {
             'user_id': user_id,
             'username': username,
-            'banned': 'False',
             'license': '',
             'plan': 'None',
             'expiry_date': ''
@@ -234,7 +251,7 @@ async def manage_ban(interaction: discord.Interaction, action: str, user: discor
                 embed.description = f"{user.name}은 이미 차단된 사용자입니다."
                 embed.color = discord.Color.red()
             else:
-                if reason is None:
+                if reason is None and 1 == 2: # 없는 부분이라 생각하삼 들여쓰기 고치기 귀찮아서 일케 해둔거
                     embed.title = "ERROR"
                     embed.description = "차단 사유를 입력해주세요."
                     embed.color = discord.Color.red()
@@ -242,7 +259,7 @@ async def manage_ban(interaction: discord.Interaction, action: str, user: discor
                     banlist[user.id] = reason
                     save_banlist(banlist)
                     embed.title = "SUCCESS"
-                    embed.description = f"{user.name}을 차단했습니다. 사유: {reason}"
+                    embed.description = f"{user.name}을 차단했습니다.\n 사유: {reason}"
                     embed.color = discord.Color.green()
         elif action == "remove":
             if user.id not in banlist:
@@ -298,22 +315,22 @@ async def unregister(interaction: discord.Interaction):
     embed = discord.Embed(title="CONFIRM", description="정말로 탈퇴하시겠습니까?", color=discord.Color.orange())
     await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
-    timeout = await view.wait()
-    if timeout:
-        embed.title = "시간 초과"
-        embed.description = "시간이 초과되었습니다. 다시 시도해주세요."
-        embed.color = discord.Color.red()
-    elif view.value:
-        remove_user(user_id)
-        embed.title = "SUCCESS"
-        embed.description = "탈퇴가 완료되었습니다. 모든 라이센스가 삭제되었습니다.\n저희 서비스를 이용해주셔서 감사합니다."
-        embed.color = discord.Color.green()
-    else:
-        embed.title = "취소됨"
-        embed.description = "탈퇴가 취소되었습니다."
-        embed.color = discord.Color.blue()
+@discord.ui.button(label="탈퇴", style=discord.ButtonStyle.danger)
+async def unregister_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+    user_id = interaction.user.id
+    if is_banned(user_id):
+        embed = discord.Embed(title="ERROR", description="BOT Service에서 차단된 유저입니다.", color=discord.Color.red())
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+        return
 
-    await interaction.edit_original_response(embed=embed, view=None)
+    if not get_user_info(user_id):
+        embed = discord.Embed(title="ERROR", description="가입되지 않은 사용자입니다.", color=discord.Color.red())
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+        return
+
+    view = ConfirmView()
+    embed = discord.Embed(title="CONFIRM", description="정말로 탈퇴하시겠습니까?", color=discord.Color.orange())
+    await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
 @client.tree.command(name="생성", description="새로운 라이센스를 생성합니다.")
 async def create_license(interaction: discord.Interaction):
@@ -383,13 +400,21 @@ async def list_info(interaction: discord.Interaction, option: str):
             await interaction.response.send_message(embed=embed, ephemeral=True)
 
     elif option == "banned":
-        banned_users = [info['username'] for info in users.values() if info.get('banned') == 'True']
-        banned_list = "\n".join(banned_users)
-        if banned_list:
-            embed = discord.Embed(title="차단된 유저 목록", description=banned_list, color=discord.Color.blue())
+        banlist = load_banlist()
+        if banlist:
+            banned_list = []
+            for user_id, reason in banlist.items():
+                try:
+                    user = await client.fetch_user(user_id)
+                    banned_list.append(f"닉네임: {user.name}, ID: {user_id}, 사유: {reason}")
+                except discord.NotFound:
+                    banned_list.append(f"닉네임: 알 수 없음, ID: {user_id}, 사유: {reason}")
+            
+            banned_users = "\n".join(banned_list)
+            embed = discord.Embed(title="차단된 유저 목록", description=banned_users, color=discord.Color.blue())
             await interaction.response.send_message(embed=embed, ephemeral=True)
         else:
-            embed = discord.Embed(title="ERROR", description="차단된 유저가 없습니다.", color=discord.Color.red())
+            embed = discord.Embed(title="알림", description="차단된 유저가 없습니다.", color=discord.Color.blue())
             await interaction.response.send_message(embed=embed, ephemeral=True)
 
     elif option == "admins":
