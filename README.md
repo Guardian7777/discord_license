@@ -3,4 +3,5 @@ newbot.py 할때 users.csv, banlist.csv 파일 생성한 다음 ㄱㄱ
 
 TODO
 > WEB 라센관리
+
 > 자동 셀프봇
