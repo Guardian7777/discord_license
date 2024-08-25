@@ -4,4 +4,6 @@ newbot.py 할때 users.csv, banlist.csv 파일 생성한 다음 ㄱㄱ
 TODO
 > WEB 라센관리
 
-> 자동 셀프봇
+> 자동 셋업 셀프봇
+
+> 라센구조 개편
